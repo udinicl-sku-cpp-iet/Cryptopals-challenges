@@ -19,32 +19,26 @@ def score_text(text):
 def find_best_single_byte_xor(byte_data):
     max_score = None
     best_key = None
-    best_message = None
-    
     for key in range(256):
         decoded = single_byte_xor(byte_data, key)
         score = score_text(decoded)
-        
         if max_score is None or score > max_score:
             max_score = score
             best_key = key
-            best_message = decoded
-    
     return best_key, max_score
 
-
-i=0
-f = open("4.txt", "r")
-riga = f.readline()
-while riga != "":
-    key, score = find_best_single_byte_xor(hex_to_bytes(riga))
-    if score>2:
-        message=single_byte_xor(hex_to_bytes(riga),key)
-        print(f'Chiave: {key}')
-        print(f'Messaggio decifrato: {message}',end="")
-        print(f'Numero riga:{i}')
-        print(f'Esadecimale:{riga}',end="")
-    riga = f.readline()
-    i=i+1
-f.close()
-
+if __name__ == "__main__":
+    max_score = best_key = i = 0
+    with open("4.txt", "r") as f:
+        righe = f.readlines()
+        while i < len(righe):
+            key, score = find_best_single_byte_xor(hex_to_bytes(righe[i]))
+            if score > max_score :
+                max_score = score
+                best_key = key
+                line = i
+            i += 1
+        print(single_byte_xor(hex_to_bytes(righe[line]),best_key))
+        print(f"Numero riga = {line+1}")
+        f.close()
+    

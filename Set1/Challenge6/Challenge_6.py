@@ -11,105 +11,97 @@ def score_text(text):
         'y': 0.0145984, 'z': 0.0007836, ' ': 0.1918182
     }
     return sum([frequency.get(chr(byte), 0) for byte in text.lower()])
+
 def hamming_distance(bytes_1,bytes_2):
+    assert len(bytes_1) == len(bytes_2)
     hamming_distance=0
-    if len(bytes_1)!=len(bytes_2):
-        print("Le stringhe devono avere la stessa lunghezza")
-    else:
-        for b1,b2 in zip(bytes_1,bytes_2):
-           for i in range(8):
-               hamming_distance+=(b1>>i)&0x1^(b2>>i)&0x1
-        return hamming_distance
-def hex_to_bytes(hex_str):
+    for b1,b2 in zip(bytes_1,bytes_2):
+        for i in range(8):
+            hamming_distance+=(b1>>i)&0x1^(b2>>i)&0x1
+    return hamming_distance
+
+def hex_to_bytes(hex_str):    
     return bytes.fromhex(hex_str)
-def single_byte_xor(byte_data, key):
-    return bytes([b ^ key for b in byte_data])
-def find_best_single_byte_xor(byte_data,n):#ritorna le prime 3 n migliori chiavi
-    result=[]
-    for key in range(256):
-        decoded = single_byte_xor(byte_data, key)
-        score = score_text(decoded)      
-        result.append((key,score))
-    result.sort(key=lambda x: x[1],reverse=True)
-    return result[:n]
-def CreateBytesList(size, bytes_array,num_blocks):
-    blocks = []
-    required_length = size * num_blocks
-    if len(bytes_array) < required_length:
-        print("ERRORE FUNZIONE CREATE_BYTE_LIST\n\n\n")
-        exit()  
-    for i in range(0, required_length+1, size):
-        block = bytes_array[i:i + size]
-        blocks.append(block)
-        num_blocks=num_blocks-1
-        if(num_blocks==0):
-            break
-    return blocks
-def found_keysize(cypher_bytes,num_block):#num_block=n_blocchi di calcolo hamming
-    if num_block%2 != 0:
-        print("ERRORE FUNZIONE FOUND_KEYSIZE\n\n\n")
-        exit()
-    result=dict()
-    for keysize in range(2,59):
-        hamm_distance=0
-        blocks=CreateBytesList(keysize,cypher_bytes,num_block)
-        for i in range(0,num_block-1,2):
-            hamm_distance+=hamming_distance(blocks[i],blocks[i+1])
-        hamm_distance=hamm_distance/keysize
-        result[keysize]=hamm_distance
-    return sorted(result.items(),key=lambda item: item[1])
-def single_byte_encrypted_group(cypher_bytes,keysize):
-    number_of_blocks_max=int(len(cypher_bytes)/keysize)
-    blocks=CreateBytesList(keysize,cypher_bytes,number_of_blocks_max)        
-    final_byte=[]
-    for j in range(keysize):
-        group_of_byte=[]
-        for x in range(number_of_blocks_max):
-            group_of_byte.append(blocks[x][j])
-        final_byte.append(group_of_byte)
-    return final_byte
-def repeating_key_xor(byte_to_encode,key):
-    i=0
-    j=0
-    xor=bytearray(len(byte_to_encode))
-    for b in byte_to_encode:
-        xor[j]=b^key[i]
-        j=j+1
-        i=i+1
-        if i>=len(key):
-            i=i%len(key)
-    return xor
-
-
-with open('6.txt','r') as f:
-    file = f.read()
-    f.close()
 def base64_to_byte(encoded_str):
     return base64.b64decode(encoded_str)
-cypher_bytes=base64_to_byte(file)
 
 
 
-num_block=36#dev'essere pari,vedi found_keysize
-print(len(cypher_bytes))
-founded_keysize=found_keysize(cypher_bytes,num_block)#PER OGNI KEYSIZE CALCOLA LO SCORE HAMMING
-print(founded_keysize)
-#print(cypher_bytes)
-print('\n\n')
-for i in range(3):
-    keysize=founded_keysize[i][0]
-    single_byte_encripted=single_byte_encrypted_group(cypher_bytes,keysize)
-    key=[]
-    for x in range(keysize):
-        #print(keysize)
-        #print(single_byte_encripted[x])
-        group=bytes(single_byte_encripted[x])
-        # print(group)
-        result=find_best_single_byte_xor(group,3)
-        # print(result)
-        key.append(result[0][0])
-    if keysize == 29:
-        print(repeating_key_xor(cypher_bytes,bytes(key)).decode('utf-8'))
-        print(bytes(key).decode('utf-8'))
+def found_keysize(cipher_bytes : bytes ,max_block : int = 40, max_keysize : int = 1200):#num_block=n_blocchi di calcolo hamming
+    result = {}
+    for keysize in range(2,max_keysize):
+        num_block = len(cipher_bytes) // keysize
+        if num_block > max_block : num_block = max_block
+        if num_block % 2 != 0    : num_block -= 1
+        if num_block < 2         : continue
+        blocks = [cipher_bytes[i * keysize:(i + 1) * keysize] for i in range(num_block)]
+        distances = []
+        for i in range(0,num_block-1):
+            dist = hamming_distance(blocks[i],blocks[i+1])
+            distances.append(dist / keysize)
+        average_distance = sum(distances) / len(distances)
+        result[keysize]  = average_distance
+    return sorted(result.items(),key=lambda item: item[1])
+
+def choose_keysize(candidates: list, n: int) -> int:
+    print(f"\nMigliori {n} keysizes trovati:")
+    for i, (keysize, score) in enumerate(candidates[:n], 1):
+        print(f"[{i}] Keysize: {keysize}, Score: {score:.4f}")
+
+    while True:
+        try:
+            scelta = int(input(f"Scegli un'opzione (1-{n}): "))
+            if 1 <= scelta <= n:
+                return candidates[scelta - 1][0]
+            else:
+                print(f"Inserisci un numero tra 1 e {n}.")
+        except ValueError:
+            print("Input non valido. Inserisci un numero intero.")
+
+def repeating_key_xor(byte_to_encode, key):
+    return bytes(
+        b ^ key[i % len(key)] for i, b in enumerate(byte_to_encode)
+    )
+
+
+def found_best_key(keysize : int, ciphertext : bytes):
+    key = bytearray(keysize)
+    for i in range(keysize):
+        best_score = 0
+        best_byte = 0
+
+        block = ciphertext[i::keysize][:((len(ciphertext)//keysize))]  # prendi tutti i byte cifrati dalla i-esima posizione della chiave
+
+        for x in range(256):
+            decoded = repeating_key_xor(block, [x])  # funzione che xor-a ogni byte con x
+            score = score_text(decoded)
+            if score > best_score:
+                best_score = score
+                best_byte = x
+
+        key[i] = best_byte
+
+    return bytes(key)
     
 
+
+
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    assert hamming_distance(b"this is a test" ,b"wokka wokka!!!")==37
+
+    with open('6.txt','r') as f:
+        file = f.read()
+        f.close()
+
+    cipher_bytes=base64_to_byte(file)
+    founded_keysize = found_keysize(cipher_bytes, max_block = 100, max_keysize = 150)
+    key             = found_best_key(choose_keysize(founded_keysize, 10), cipher_bytes)
+    print(key)
+    print(repeating_key_xor(cipher_bytes,key).decode('utf-8'))
