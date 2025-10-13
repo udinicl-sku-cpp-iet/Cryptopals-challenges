@@ -1,0 +1,2 @@
+def base64_to_byte(encoded_str):
+    return base64.b64decode(encoded_str)

@@ -86,13 +86,6 @@ def found_best_key(keysize : int, ciphertext : bytes):
 
 
 
-
-
-
-
-
-
-
 if __name__ == "__main__":
     assert hamming_distance(b"this is a test" ,b"wokka wokka!!!")==37
 
