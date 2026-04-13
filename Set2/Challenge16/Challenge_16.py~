@@ -1,0 +1,97 @@
+import os
+import base64
+import random
+from Cryptodome.Cipher import AES
+
+class InvalidPaddingException(Exception):
+    pass
+
+def random_aes_key():
+    return os.urandom(16)
+
+def strip_pkcs7_pad(data: bytes) -> bytes:
+    padding_len = data[-1]
+    if padding_len == 0 or padding_len > len(data):
+        raise InvalidPaddingException("Padding non valido: lunghezza fuori range.")
+
+    padding_bytes = data[-padding_len:]
+    
+    expected_padding = bytes([padding_len] * padding_len)
+    
+    if padding_bytes != expected_padding:
+        raise InvalidPaddingException("Padding non valido: byte non corrispondenti.")
+        
+    return data[:-padding_len]
+
+def pkcs7_pad(data: bytes, block_size: int) -> bytes:
+    padding_len = block_size - (len(data) % block_size)
+    padding = bytes([padding_len] * padding_len)
+    return data + padding
+
+def aes_ecb_encrypt(plaintext : bytes, key : bytes) -> bytes:
+    cypher     = AES.new(key,AES.MODE_ECB)
+    cyphertext = cypher.encrypt(plaintext)
+    return cyphertext
+
+def aes_ecb_decrypt(cyphertext : bytes, key : bytes) -> bytes:
+    cypher    = AES.new(key,AES.MODE_ECB)
+    plaintext = cypher.decrypt(cyphertext)
+    return plaintext
+
+def repeating_key_xor(byte_to_encode, key):
+    return bytes(
+        b ^ key[i % len(key)] for i, b in enumerate(byte_to_encode)
+    )
+def aes_cbc_encrypt(plaintext : bytes, key : bytes, iv : bytes) -> bytes:
+    blocks = []
+    cyphertext = b''
+    for i in range(0, len(plaintext), 16):
+        blocks.append(plaintext[i:i+16])
+    for i, block in enumerate(blocks):
+        if i == 0:
+            xor = repeating_key_xor(block, iv)
+        else:
+            xor = repeating_key_xor(block, prev)
+        prev = aes_ecb_encrypt(xor,key)
+        cyphertext += prev
+    return cyphertext
+
+def aes_cbc_decrypt(cyphertext : bytes, key : bytes, iv : bytes) -> bytes:
+    blocks = []
+    plaintext = b''
+    for i in range(0, len(cyphertext), 16):
+        blocks.append(cyphertext[i:i+16])
+    for i in range(len(blocks)):
+        block = aes_ecb_decrypt(blocks[i],key)
+        if i == 0:
+            xor = repeating_key_xor(block, iv)
+        else:
+            xor = repeating_key_xor(block, blocks[i-1])
+        plaintext += xor
+    return plaintext
+
+def first(userinput : bytes) -> bytes:
+    prefix = b"comment1=cooking%20MCs;userdata="
+    suffix = b";comment2=%20like%20a%20pound%20of%20bacon"
+    userinput = prefix+userinput.replace(b";", b"_").replace(b"=", b"_")+suffix
+    return aes_cbc_encrypt(pkcs7_pad(userinput, 16), key, iv)
+
+def second(cyphertext : bytes) -> bytes:
+    plain = strip_pkcs7_pad(aes_cbc_decrypt(cyphertext, key, iv))
+    print(plain)
+    for i in plain.split(b';'):
+        if i.split(b'=') == [b'admin', b'true']:
+            return True
+    return False
+    
+key = random_aes_key()
+iv  = bytes([0] * 16)
+
+
+payload = b'!admin3true'
+cypher = first(payload)
+cypher = bytearray(cypher)
+
+cypher[16] = cypher[16] ^ ord('!') ^ ord(b';')
+cypher[22] = cypher[22] ^ ord('3') ^ ord(b'=')
+print(second(cypher))
